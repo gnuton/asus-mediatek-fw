@@ -5,6 +5,7 @@ jobs:
       - image: gnuton/asus-mediatek-toolchains-docker:latest 
         environment:
           CHANGELOG_FILE: "/tmp/CHANGELOG"
+          PROFILE: "dsl-n16"
     steps:
       - checkout
       - run:
@@ -32,22 +33,13 @@ jobs:
               echo "No changelog to generate. Changelog is generated only for tags matching ${REGXP_TO_MATCH}";
             fi;
       - run:
-          name: Setup 
-          shell: /bin/bash
-          command: |
-            apt-get update
-            apt-get install -y build-essential bison flex gawk dos2unix libstdc++5 ia32-libs autoconf2.13 autoconf-archive gnu-standards autoconf-doc libtool gettext git net-tools
-            mkdir /opt/trendchip/
-            tar -zxf ./toolchain/mips-linux-uclibc.tgz -C /opt/trendchip/
-            export PATH=/opt/trendchip/mips-linux-uclibc/usr/bin/:$PATH 
-      - run:
-          name: Build firmware for DSL-N16
+          name: Build firmware
           shell: /bin/bash
           no_output_timeout: 120m
           command: | 
             ls
             pwd
-            PROFILE=dsl-n16 make | tee "/tmp/build.log" # | grep -i "error\|-e"
+            make | tee "/tmp/build.log" # | grep -i "error\|-e"
       - run:
           name: Prepare workspace
           command: |

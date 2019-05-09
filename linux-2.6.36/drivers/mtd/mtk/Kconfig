@@ -1,0 +1,11 @@
+menu "MTK Nand Flash Interface Device Drivers"
+	depends on MTD!=n
+
+config MTK_MTD_NAND
+	tristate "NAND Flash Support"
+	depends on MIPS_RT63365
+	select MTD_PARTITIONS
+	help
+	  support MT7510 Nand flash controller.
+
+endmenu

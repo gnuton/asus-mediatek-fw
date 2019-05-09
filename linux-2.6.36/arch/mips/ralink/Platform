@@ -1,0 +1,11 @@
+#
+# Ralink boards
+#
+platform-$(CONFIG_MIPS_TC3262)	+= ralink/ softfloat/
+cflags-$(CONFIG_MIPS_TC3262)	+= -I$(srctree)/arch/mips/include/asm/tc3162/
+ifneq ($(strip $(TCSUPPORT_FREE_BOOTBASE)),)
+load-$(CONFIG_MIPS_TC3262) += $(KERNEL_START_ADDR)
+else
+load-$(CONFIG_MIPS_TC3262)		+= 0xffffffff80020000
+endif
+all-$(CONFIG_MIPS_TC3262)		:= $(COMPRESSION_FNAME).bin

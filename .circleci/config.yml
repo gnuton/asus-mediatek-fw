@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: ubuntu:12.04 
+      - image: gnuton/asus-mediatek-toolchains-docker:latest 
         environment:
           CHANGELOG_FILE: "/tmp/CHANGELOG"
     steps:

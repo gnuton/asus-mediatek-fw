@@ -1,0 +1,120 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: ubuntu:12.04 
+        environment:
+          CHANGELOG_FILE: "/tmp/CHANGELOG"
+    steps:
+      - checkout
+      - run:
+          name: Set EXTENDNO
+          shell: /bin/bash
+          command: |
+            if [ -z "${CIRCLE_TAG}" ]; then
+              echo "Nothing to do. Not a release."
+            else
+              EXT_TAG="$(echo -n $CIRCLE_TAG | sed -e "s/[0-9._]\\+\\-//g")"
+              sed -i "s/EXTENDNO=.*/EXTENDNO=${EXT_TAG}/g" release/src-rt/version.conf
+            fi
+      - run:
+          name: Generate changelog (only for tags)
+          command: |
+            REGXP_TO_MATCH=.*gnuton.*
+            if [[ ${CIRCLE_TAG} =~ ${REGXP_TO_MATCH} ]]; then
+              CURRENT_TAG=${CIRCLE_TAG}
+              PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v snapshot | grep ${REGXP_TO_MATCH} | head -n 2 | sed -n 2p)
+              echo "Generating logs between the tags ${PREVIOUS_TAG} and ${CURRENT_TAG}"
+              echo "Changes from the latest stable gnuton build (${PREVIOUS_TAG}):" > "${CHANGELOG_FILE}"
+              git log ${PREVIOUS_TAG}...${CURRENT_TAG} --pretty=format:'* %s' --reverse | grep -v 'Merge branch' >> "${CHANGELOG_FILE}"
+              cat "${CHANGELOG_FILE}"
+            else
+              echo "No changelog to generate. Changelog is generated only for tags matching ${REGXP_TO_MATCH}";
+            fi;
+      - run:
+          name: Setup 
+          shell: /bin/bash
+          command: |
+            apt-get update
+            apt-get install -y build-essential bison flex gawk dos2unix libstdc++5 ia32-libs autoconf2.13 autoconf-archive gnu-standards autoconf-doc libtool gettext
+            mkdir /opt/trendchip/
+            tar -zxf ./toolchain/mips-linux-uclibc.tgz -C /opt/trendchip/
+            export PATH=/opt/trendchip/mips-linux-uclibc/usr/bin/:$PATH 
+      - run:
+          name: Build firmware
+          shell: /bin/bash
+          no_output_timeout: 120m
+          command: | 
+            ls
+            pwd
+            make | tee "/tmp/build.log" # | grep -i "error\|-e"
+      - run:
+          name: Prepare workspace
+          command: |
+            mkdir -p workspace/release
+            cp ${HOME}/project/bin/* workspace/release
+            cp /tmp/build.log workspace/release
+             if [ -z "${CIRCLE_TAG}" ]; then
+              echo "No CHANGELOG to copy. Not a release build."
+            else
+              cp "${CHANGELOG_FILE}" workspace/release
+            fi
+      - persist_to_workspace:
+          root: workspace
+          paths:
+            - release
+  publish-github-release:
+    docker:
+      - image: cibuilds/github:latest
+    steps:
+      - attach_workspace:
+          at: workspace
+      - run: ls workspace/release
+      - run:
+          name: "Publish Release on Github"
+          command: |
+            echo "Uploading release..."
+            RELEASE_TITLE="Release: ${CIRCLE_TAG}"
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete -n "${RELEASE_TITLE}" -b "$(cat workspace/release/CHANGELOG)" ${CIRCLE_TAG} workspace/release/
+  publish-github-ci-pre-release:
+    docker:
+      - image: cibuilds/github:latest
+    steps:
+      - attach_workspace:
+          at: workspace
+      - run: ls workspace/release
+      - run:
+          name: "Publish CI pre-release on Github"
+          command: |
+            echo "Uploading CI pre-release..."
+            RELEASE_TITLE="Snapshot: ${CIRCLE_TAG}"
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -n "${RELEASE_TITLE}" -b "$(cat workspace/release/CHANGELOG)" -delete -prerelease ${CIRCLE_TAG} workspace/release/
+ 
+workflows:
+  version: 2
+  build_and_release:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              ignore:
+               - master
+      - publish-github-release:
+          filters:
+            tags:
+              only: /[0-9]+.*gnuton.*/
+            branches:
+              ignore: /.*/
+          requires:
+            - build
+      - publish-github-ci-pre-release:
+          filters:
+            tags:
+              only: /gnuton-snapshot-.*/
+            branches:
+              ignore: /.*/
+          requires:
+            - build
+

@@ -36,23 +36,23 @@ jobs:
           shell: /bin/bash
           command: |
             apt-get update
-            apt-get install -y build-essential bison flex gawk dos2unix libstdc++5 ia32-libs autoconf2.13 autoconf-archive gnu-standards autoconf-doc libtool gettext
+            apt-get install -y build-essential bison flex gawk dos2unix libstdc++5 ia32-libs autoconf2.13 autoconf-archive gnu-standards autoconf-doc libtool gettext git net-tools
             mkdir /opt/trendchip/
             tar -zxf ./toolchain/mips-linux-uclibc.tgz -C /opt/trendchip/
             export PATH=/opt/trendchip/mips-linux-uclibc/usr/bin/:$PATH 
       - run:
-          name: Build firmware
+          name: Build firmware for DSL-N16
           shell: /bin/bash
           no_output_timeout: 120m
           command: | 
             ls
             pwd
-            make | tee "/tmp/build.log" # | grep -i "error\|-e"
+            PROFILE=dsl-n16 make | tee "/tmp/build.log" # | grep -i "error\|-e"
       - run:
           name: Prepare workspace
           command: |
             mkdir -p workspace/release
-            cp ${HOME}/project/bin/* workspace/release
+            cp ${HOME}/project/Project/images/* workspace/release
             cp /tmp/build.log workspace/release
              if [ -z "${CIRCLE_TAG}" ]; then
               echo "No CHANGELOG to copy. Not a release build."

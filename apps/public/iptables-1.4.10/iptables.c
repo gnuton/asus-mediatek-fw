@@ -1357,7 +1357,7 @@ int do_command(int argc, char *argv[], char **table, struct iptc_handle **handle
 	/* Suppress error messages: we may add new options if we
            demand-load a protocol. */
 	opterr = 0;
-	
+
 	while ((c = getopt_long(argc, argv,
 	   "-A:D:R:I:L::S::M:F::Z::N:X::E:P:Vh::o:p:s:d:j:i:fbvnt:m:xc:g:",
 					   opts, NULL)) != -1) {

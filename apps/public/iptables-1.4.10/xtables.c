@@ -27,17 +27,9 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/statfs.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
-#if defined(HAVE_LINUX_MAGIC_H)
-#	include <linux/magic.h> /* for PROC_SUPER_MAGIC */
-#elif defined(HAVE_LINUX_PROC_FS_H)
-#	include <linux/proc_fs.h>	/* Linux 2.4 */
-#else
-#	define PROC_SUPER_MAGIC	0x9fa0
-#endif
 
 #include <xtables.h>
 #include <limits.h> /* INT_MAX in ip_tables.h/ip6_tables.h */
@@ -133,7 +125,6 @@ struct option *xtables_merge_options(struct option *oldopts,
  */
 struct xtables_afinfo {
 	const char *kmod;
-	const char *proc_exists;
 	const char *libprefix;
 	uint8_t family;
 	uint8_t ipproto;
@@ -143,7 +134,6 @@ struct xtables_afinfo {
 
 static const struct xtables_afinfo afinfo_ipv4 = {
 	.kmod          = "ip_tables",
-	.proc_exists   = "/proc/net/ip_tables_names",
 	.libprefix     = "libipt_",
 	.family	       = NFPROTO_IPV4,
 	.ipproto       = IPPROTO_IP,
@@ -153,7 +143,6 @@ static const struct xtables_afinfo afinfo_ipv4 = {
 
 static const struct xtables_afinfo afinfo_ipv6 = {
 	.kmod          = "ip6_tables",
-	.proc_exists   = "/proc/net/ip6_tables_names",
 	.libprefix     = "libip6t_",
 	.family        = NFPROTO_IPV6,
 	.ipproto       = IPPROTO_IPV6,
@@ -169,17 +158,9 @@ static const char *xtables_libdir;
 /* the path to command to load kernel module */
 const char *xtables_modprobe_program;
 
-/* Keep track of matches/targets pending full registration: linked lists. */
-struct xtables_match *xtables_pending_matches=NULL;
-struct xtables_target *xtables_pending_targets=NULL;
-
-/* Keep track of fully registered external matches/targets: linked lists. */
+/* Keeping track of external matches and targets: linked lists.  */
 struct xtables_match *xtables_matches;
 struct xtables_target *xtables_targets;
-
-/* Fully register a match/target which was previously partially registered. */
-static void xtables_fully_register_pending_match(struct xtables_match *me);
-static void xtables_fully_register_pending_target(struct xtables_target *me);
 
 void xtables_init(void)
 {
@@ -370,32 +351,10 @@ int xtables_insmod(const char *modname, const char *modprobe, bool quiet)
 	return -1;
 }
 
-/* return true if a given file exists within procfs */
-static bool proc_file_exists(const char *filename)
-{
-	struct stat s;
-	struct statfs f;
-
-	if (lstat(filename, &s))
-		return false;
-	if (!S_ISREG(s.st_mode))
-		return false;
-	if (statfs(filename, &f))
-		return false;
-	if (f.f_type != PROC_SUPER_MAGIC)
-		return false;
-	return true;
-}
-
 int xtables_load_ko(const char *modprobe, bool quiet)
 {
 	static bool loaded = false;
 	static int ret = -1;
-
-	if (proc_file_exists(afinfo->proc_exists)) {
-		loaded = true;
-		return 0;
-	};
 
 	if (!loaded) {
 		ret = xtables_insmod(afinfo->kmod, modprobe, quiet);
@@ -575,7 +534,6 @@ struct xtables_match *
 xtables_find_match(const char *name, enum xtables_tryload tryload,
 		   struct xtables_rule_match **matches)
 {
-	struct xtables_match **dptr=NULL;
 	struct xtables_match *ptr;
 	const char *icmp6 = "icmp6";
 
@@ -590,18 +548,6 @@ xtables_find_match(const char *name, enum xtables_tryload tryload,
 	     (strcmp(name,"ipv6-icmp") == 0) ||
 	     (strcmp(name,"icmp6") == 0) )
 		name = icmp6;
-
-	/* Trigger delayed initialization */
-	for (dptr = &xtables_pending_matches; *dptr; ) {
-		if (strcmp(name, (*dptr)->name) == 0) {
-			ptr = *dptr;
-			*dptr = (*dptr)->next;
-			ptr->next = NULL;
-			xtables_fully_register_pending_match(ptr);
-		} else {
-			dptr = &((*dptr)->next);
-		}
-	}
 
 	for (ptr = xtables_matches; ptr; ptr = ptr->next) {
 		if (strcmp(name, ptr->name) == 0) {
@@ -668,7 +614,6 @@ xtables_find_match(const char *name, enum xtables_tryload tryload,
 struct xtables_target *
 xtables_find_target(const char *name, enum xtables_tryload tryload)
 {
-	struct xtables_target **dptr=NULL;
 	struct xtables_target *ptr;
 
 	/* Standard target? */
@@ -678,18 +623,6 @@ xtables_find_target(const char *name, enum xtables_tryload tryload)
 	    || strcmp(name, XTC_LABEL_QUEUE) == 0
 	    || strcmp(name, XTC_LABEL_RETURN) == 0)
 		name = "standard";
-
-	/* Trigger delayed initialization */
-	for (dptr = &xtables_pending_targets; *dptr; ) {
-		if (strcmp(name, (*dptr)->name) == 0) {
-			ptr = *dptr;
-			*dptr = (*dptr)->next;
-			ptr->next = NULL;
-			xtables_fully_register_pending_target(ptr);
-		} else {
-			dptr = &((*dptr)->next);
-		}
-	}
 
 	for (ptr = xtables_targets; ptr; ptr = ptr->next) {
 		if (strcmp(name, ptr->name) == 0)
@@ -785,6 +718,8 @@ static int compatible_target_revision(const char *name, u_int8_t revision)
 
 void xtables_register_match(struct xtables_match *me)
 {
+	struct xtables_match **i, *old;
+
 	if (me->version == NULL) {
 		fprintf(stderr, "%s: match %s<%u> is missing a version\n",
 		        xt_params->program_name, me->name, me->revision);
@@ -799,7 +734,7 @@ void xtables_register_match(struct xtables_match *me)
 	}
 
 	if (strlen(me->name) >= XT_EXTENSION_MAXNAMELEN) {
-		fprintf(stderr, "%s: match `%s' has invalid name\n",
+		fprintf(stderr, "%s: target `%s' has invalid name\n",
 			xt_params->program_name, me->name);
 		exit(1);
 	}
@@ -814,15 +749,6 @@ void xtables_register_match(struct xtables_match *me)
 	/* ignore not interested match */
 	if (me->family != afinfo->family && me->family != AF_UNSPEC)
 		return;
-
-	/* place on linked list of matches pending full registration */
-	me->next = xtables_pending_matches;
-	xtables_pending_matches = me;
-}
-
-static void xtables_fully_register_pending_match(struct xtables_match *me)
-{
-	struct xtables_match **i=NULL, *old=NULL;
 
 	old = xtables_find_match(me->name, XTF_DURING_LOAD, NULL);
 	if (old) {
@@ -877,6 +803,8 @@ void xtables_register_matches(struct xtables_match *match, unsigned int n)
 
 void xtables_register_target(struct xtables_target *me)
 {
+	struct xtables_target *old;
+
 	if (me->version == NULL) {
 		fprintf(stderr, "%s: target %s<%u> is missing a version\n",
 		        xt_params->program_name, me->name, me->revision);
@@ -906,15 +834,6 @@ void xtables_register_target(struct xtables_target *me)
 	/* ignore not interested target */
 	if (me->family != afinfo->family && me->family != AF_UNSPEC)
 		return;
-
-	/* place on linked list of targets pending full registration */
-	me->next = xtables_pending_targets;
-	xtables_pending_targets = me;
-}
-
-static void xtables_fully_register_pending_target(struct xtables_target *me)
-{
-	struct xtables_target *old=NULL;
 
 	old = xtables_find_target(me->name, XTF_DURING_LOAD);
 	if (old) {

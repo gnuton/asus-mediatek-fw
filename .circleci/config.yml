@@ -12,7 +12,7 @@ jobs:
           name: Move to docker
           shell: /bin/bash
           command:
-            apt-get install -y textinfo makeinfo pkg-config
+            apt-get install -y texinfo makeinfo pkg-config
       - run:
           name: Set EXTENDNO
           shell: /bin/bash

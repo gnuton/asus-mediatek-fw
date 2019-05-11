@@ -9,6 +9,15 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Move to docker
+          shell: /bin/bash
+          command:
+            apt-get install -y texinfo pkg-config groff-base python-software-properties
+
+            add-apt-repository ppa:dns/gnu -y
+            apt-get update -q
+            apt-get upgrade -y
+      - run:
           name: Set EXTENDNO
           shell: /bin/bash
           command: |

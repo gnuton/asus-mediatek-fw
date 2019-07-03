@@ -22,7 +22,7 @@ jobs:
       - run:
           name: Generate changelog (only for tags)
           command: |
-            REGXP_TO_MATCH=.*gnuton.*
+            REGXP_TO_MATCH=gnuton
             if [[ ${CIRCLE_TAG} =~ ${REGXP_TO_MATCH} ]]; then
               CURRENT_TAG=${CIRCLE_TAG}
               PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v snapshot | grep ${REGXP_TO_MATCH} | head -n 2 | sed -n 2p)

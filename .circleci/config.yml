@@ -26,7 +26,7 @@ jobs:
             if [[ ${CIRCLE_TAG} =~ ${REGXP_TO_MATCH} ]]; then
               CURRENT_TAG=${CIRCLE_TAG}
               PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v snapshot | grep ${REGXP_TO_MATCH} | head -n 2 | sed -n 2p)
-              if [[ -z ${PREVIOUS_TAG} ]];
+              if [[ -z ${PREVIOUS_TAG} ]]; then
                 INITIAL_COMMIT=$(git rev-list --max-parents=0 HEAD)
                 PREVIOUS_TAG=${INITIAL_COMMIT}
               fi;

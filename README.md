@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/gnuton/asus-mediatek-fw.svg?style=svg)](https://circleci.com/gh/gnuton/asus-mediatek-fw)
+[![CircleCI](https://circleci.com/gh/gnuton/asus-mediatek-fw/tree/mainline.svg?style=svg)](https://circleci.com/gh/gnuton/asus-mediatek-fw/tree/mainline)
 
 ASUS Mediatek Firmware
 ======================

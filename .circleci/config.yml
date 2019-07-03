@@ -26,6 +26,10 @@ jobs:
             if [[ ${CIRCLE_TAG} =~ ${REGXP_TO_MATCH} ]]; then
               CURRENT_TAG=${CIRCLE_TAG}
               PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v snapshot | grep ${REGXP_TO_MATCH} | head -n 2 | sed -n 2p)
+              if [[ -z ${PREVIOUS_TAG} ]];
+                INITIAL_COMMIT=$(git rev-list --max-parents=0 HEAD)
+                PREVIOUS_TAG=${INITIAL_COMMIT}
+              fi;
               echo "Generating logs between the tags ${PREVIOUS_TAG} and ${CURRENT_TAG}"
               echo "Changes from the latest stable gnuton build (${PREVIOUS_TAG}):" > "${CHANGELOG_FILE}"
               git log ${PREVIOUS_TAG}...${CURRENT_TAG} --pretty=format:'* %s' --reverse | grep -v 'Merge branch' >> "${CHANGELOG_FILE}"

@@ -16,7 +16,8 @@ jobs:
               echo "Nothing to do. Not a release."
             else
               EXT_TAG="$(echo -n $CIRCLE_TAG | sed -e "s/[0-9._]\\+\\-//g")"
-              sed -i "s/EXTENDNO=.*/EXTENDNO=${EXT_TAG}/g" release/src-rt/version.conf
+              echo "FIXME Version not set"
+              #sed -i "s/EXTENDNO=.*/EXTENDNO=${EXT_TAG}/g" release/src-rt/version.conf
             fi
       - run:
           name: Generate changelog (only for tags)

@@ -5,7 +5,7 @@ jobs:
       - image: gnuton/asus-mediatek-toolchains-docker:latest 
         environment:
           CHANGELOG_FILE: "/tmp/CHANGELOG"
-          PROFILE: "dsl-n16"
+          PROFILE: "dsl-n14u"
     steps:
       - checkout
       - run:

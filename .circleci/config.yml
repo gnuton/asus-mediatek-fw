@@ -44,6 +44,7 @@ jobs:
           command: | 
             ls
             pwd
+            rm ${HOME}/project/filesystem/* -Rf
             make | tee "/tmp/build.log" # | grep -i "error\|-e"
       - run:
           name: Prepare workspace

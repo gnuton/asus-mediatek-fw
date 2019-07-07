@@ -1,2 +1,0 @@
-::sysinit:/usr/etc/init.d/rcS
-::respawn:/userfs/bin/ra_menu

@@ -1,1 +1,0 @@
-<% tcWebApi_UpdateBandwidth("daily"); %>

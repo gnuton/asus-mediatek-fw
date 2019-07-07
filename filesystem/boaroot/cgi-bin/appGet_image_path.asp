@@ -1,1 +1,0 @@
-<% do_appGet_image_path_cgi() %>

@@ -1,9 +1,0 @@
-/dev/ttyUSB0
-921600
-connect '/etc/ppp/peers/ppp_connect'
-crtscts
-noauth
-usepeerdns
-noipdefault
-defaultroute
-

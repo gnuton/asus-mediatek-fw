@@ -1,1 +1,0 @@
-<% vpnupload_cgi() %>

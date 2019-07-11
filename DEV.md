@@ -2,6 +2,10 @@ Notes for Developers
 ====================
 ## Build this code locally (using docker)
 ```
+git clone URL_TO_THIS_REPO
+cd asus-media-fw
+docker run -it -v $PWD:/build gnuton/asus-mediatek-toolchains-docker:latest /bin/bash
+PROFILE="dsl-n16" make
 ```
 
 ## Change Kernel configuration

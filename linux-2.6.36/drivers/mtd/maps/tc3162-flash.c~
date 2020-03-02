@@ -1,0 +1,297 @@
+#include <linux/init.h>
+#include <linux/types.h>
+#include <linux/root_dev.h>
+#include <linux/kernel.h>
+#include <linux/mtd/map.h>
+#include <linux/mtd/mtd.h>
+#include <linux/mtd/partitions.h>
+#include <linux/vmalloc.h>
+#include <asm/io.h>
+#include <asm/tc3162/tc3162.h>
+
+#define WINDOW_ADDR 0x1fc00000
+#define WINDOW_SIZE 0x400000
+#define BUSWIDTH 	2
+
+#define TRX_LEN	256
+#define KERNEL_PARTITION(a)	(a + TRX_LEN)  //Include trx header
+#define ROOTFS_PARTITION(a)	((a + 0x10000) & ~(0x10000-1))
+
+ #ifdef TCSUPPORT_MTD_ENCHANCEMENT
+ #if 0
+ #if defined ( TCSUPPORT_RESERVEAREA_1_BLOCK)
+ #define BLOCK_NUM_FOR_RESERVEAREA 1
+ #elif defined(TCSUPPORT_RESERVEAREA_2_BLOCK)
+  #define BLOCK_NUM_FOR_RESERVEAREA 2
+ #elif defined(TCSUPPORT_RESERVEAREA_3_BLOCK)
+ #define BLOCK_NUM_FOR_RESERVEAREA 3
+#else //TCSUPPORT_RESERVEAREA_4_BLOCK
+ #define BLOCK_NUM_FOR_RESERVEAREA 4
+#endif
+#endif
+#if ((TCSUPPORT_RESERVEAREA_BLOCK != 1)&& (TCSUPPORT_RESERVEAREA_BLOCK != 2)&& (TCSUPPORT_RESERVEAREA_BLOCK !=3)&& (TCSUPPORT_RESERVEAREA_BLOCK !=4))
+#define BLOCK_NUM_FOR_RESERVEAREA 4
+#else
+ #define BLOCK_NUM_FOR_RESERVEAREA TCSUPPORT_RESERVEAREA_BLOCK
+#endif
+#endif
+
+static struct mtd_info *tc3162_mtd_info;
+
+static struct map_info tc3162_map = {
+       .name = "tc3162",
+       .size = WINDOW_SIZE,
+       .bankwidth = BUSWIDTH,
+       .phys = WINDOW_ADDR,
+};
+
+static struct mtd_partition tc3162_parts[] = {
+	{									 	/* First partition */
+		  name 	     : "bootloader",	 	/* Bootloader section */
+		  size	  	 : 0x00010000, 		 	/* Size  */
+		  offset     : 0				 	/* Offset from start of flash- location 0x0*/
+//		  mask_flags : MTD_WRITEABLE	 	/* This partition is not writable */
+	},
+	{									 	/* Second partition */
+		  name       : "romfile",			/* config filesystem section */
+		  size	     :  0x00010000,		 	/* Size */
+		  offset     : MTDPART_OFS_APPEND	/* Append after bootloader section */
+	},
+	{									 	/* Third partition */
+		  name       : "kernel",		 	/* Kernel section */
+#ifdef CONFIG_MTD_PURE_BRIDGE
+		  size	     :  0x000a0000,		 	/* Size */
+#else
+		  size		 :	0x000f0000,
+#endif
+		  offset     : MTDPART_OFS_APPEND	/* Append after bootloader section */
+	},
+	{									 	/* Fourth partition */
+		  name       : "rootfs", 		 	/* Root filesystem section */
+		  size	     : MTDPART_SIZ_FULL, 	/* Occupy rest of flash */
+		  offset     : MTDPART_OFS_APPEND 	/* Append after kernel section */
+	},
+	{
+		  name       : "tclinux",            /* tclinux partition */	
+		  size       : MTDPART_SIZ_FULL,    /* Occupy rest of flash */
+		  offset     : 0x00020000   
+	}
+#ifdef CONFIG_DUAL_IMAGE
+	,
+	{
+		  name       : "kernel_slave",            /* tclinux slave partition */	
+#ifdef CONFIG_MTD_PURE_BRIDGE
+		  size	     :  0x000a0000,		 	/* Size */
+#else
+		  size		 :	0x000d0000,
+#endif	  
+		   offset     : 0x00520000   
+	},
+	{
+		  name       : "rootfs_slave",            /* tclinux slave partition */	
+		  size       : MTDPART_SIZ_FULL,    /* Occupy rest of flash */
+		  offset     : MTDPART_OFS_APPEND   
+	},
+	{
+		  name       : "tclinux_slave",            /* tclinux slave partition */	
+		  size       : MTDPART_SIZ_FULL,    /* Occupy rest of flash */
+		  offset     : 0x00520000   
+	}
+ #endif
+ #ifdef TCSUPPORT_MTD_ENCHANCEMENT
+ 	,
+	 {
+		  name       : "reservearea",            /*test partition */	
+		  size       : 0x00040000,   /* occupy the last 4 blocks */
+		  offset     : MTDPART_OFS_APPEND   
+	}
+#endif
+};
+
+static int tc3162_parts_size = sizeof(tc3162_parts) / sizeof(tc3162_parts[0]);
+
+static struct mtd_info *get_mtd_named(char *name)
+{
+	int i;
+	struct mtd_info *mtd;
+
+	for (i = 0; i < 32; i++) {
+		mtd = get_mtd_device(NULL, i);
+		if (mtd) {
+			if (strcmp(mtd->name, name) == 0)
+				return(mtd);
+			put_mtd_device(mtd);
+		}
+	}
+	return(NULL);
+}
+
+static int __init tc3162_mtd_init(void)
+{
+	struct mtd_info *mtd;
+	unsigned int *header;
+	#if defined(CONFIG_DUAL_IMAGE) || defined(TCSUPPORT_MTD_ENCHANCEMENT)
+	int i = 0;
+	#endif
+	#ifdef CONFIG_DUAL_IMAGE
+	char *bufaddr = (char*)0x8001ffff;
+	const char flagvalue = 1;//not change!!because we use this flag to judge which image
+	char tmp[8] = {0};
+	#endif
+#if defined(CONFIG_DUAL_IMAGE) && defined(TCSUPPORT_MTD_ENCHANCEMENT)
+	u_int32_t tclinux_slave_offset = 0x00520000;
+	u_int32_t tclinux_slave_size = 0;
+#endif
+#ifdef TCSUPPORT_MTD_ENCHANCEMENT
+	u_int32_t tclinux_size = 0;
+#endif
+
+	/*add 8M 16M flash support. shnwind*/
+	if (isTC3162U || isTC3182 || isRT65168 || isRT63165){
+		header = (unsigned int *)0xb0020000;
+		/*enable addr bigger than 4M support.*/
+		VPint(0xbfb00038) |= 0x80000000;
+		printk("tc3162: flash device 0x%08x at 0x%08x\n", 0x1000000, 0x10000000);
+		tc3162_map.virt = ioremap_nocache(0x10000000, 0x1000000);
+		tc3162_map.phys = 0x10000000;
+		tc3162_map.size = 0x1000000;
+		ioremap_nocache(WINDOW_ADDR, WINDOW_SIZE);
+	}else{
+	
+		header = (unsigned int *)0xbfc20000;
+		printk("tc3162: flash device 0x%08x at 0x%08x\n", WINDOW_SIZE, WINDOW_ADDR);
+		tc3162_map.virt = ioremap_nocache(WINDOW_ADDR, WINDOW_SIZE);
+
+	}
+	if (!tc3162_map.virt) {
+   		printk("tc3162: Failed to ioremap\n");
+		return -EIO;
+	}
+
+	simple_map_init(&tc3162_map);
+
+	/* check if boot from SPI flash */
+	if (IS_SPIFLASH) {
+		tc3162_mtd_info = do_map_probe("spiflash_probe", &tc3162_map);
+	} else {
+		tc3162_mtd_info = do_map_probe("cfi_probe", &tc3162_map);
+	}
+
+	if (!tc3162_mtd_info) {
+		iounmap(tc3162_map.virt);
+		return -ENXIO;
+	}
+
+  	tc3162_mtd_info->owner = THIS_MODULE;
+	#ifdef CONFIG_DUAL_IMAGE
+	for(i= 0; i < tc3162_parts_size; i++)
+	{
+		if(!strcmp(tc3162_parts[i].name,"kernel"))
+		{
+			tc3162_parts[i].size = KERNEL_PARTITION(header[20]);
+			tc3162_parts[i+1].size = ROOTFS_PARTITION(header[21]);
+			#ifdef TCSUPPORT_MTD_ENCHANCEMENT
+			tclinux_size = tc3162_parts[i].size+tc3162_parts[i+1].size;
+			#endif
+		}
+		if(!strcmp(tc3162_parts[i].name,"kernel_slave"))
+		{
+			unsigned int *header_slave = (unsigned int *)(0xb0020000+0x500000);
+			tc3162_parts[i].size = KERNEL_PARTITION(header_slave[20]);
+			tc3162_parts[i+1].size = ROOTFS_PARTITION(header_slave[21]);
+		 #ifdef TCSUPPORT_MTD_ENCHANCEMENT
+			tclinux_slave_offset = tc3162_parts[i].offset;
+		 	tclinux_slave_size = tc3162_parts[i].size + tc3162_parts[i+1].size;
+		 #endif
+		}	
+	}
+	#else
+	tc3162_parts[2].size = KERNEL_PARTITION(header[20]);
+	tc3162_parts[3].size = ROOTFS_PARTITION(header[21]);
+	printk("KERNEL=%08x\n", KERNEL_PARTITION(header[20]));
+	printk("ROOTFS=%08x\n", ROOTFS_PARTITION(header[21]));
+	#ifdef TCSUPPORT_MTD_ENCHANCEMENT
+	tclinux_size = tc3162_parts[2].size + tc3162_parts[3].size;
+	#endif
+	#endif
+
+//use last 4 block as reserve area for storing data(for example:syslog,backupromfile,and so on)
+ #ifdef TCSUPPORT_MTD_ENCHANCEMENT
+ 	for(i= 0; i < tc3162_parts_size; i++)
+	{
+		if(!strcmp(tc3162_parts[i].name,"reservearea"))
+		{
+			tc3162_parts[i].offset = tc3162_mtd_info->size -BLOCK_NUM_FOR_RESERVEAREA*( tc3162_mtd_info->erasesize);
+			tc3162_parts[i].size = BLOCK_NUM_FOR_RESERVEAREA*(tc3162_mtd_info->erasesize);
+		}
+		if(!strcmp(tc3162_parts[i].name,"tclinux"))
+		{
+			#ifdef CONFIG_DUAL_IMAGE
+			tc3162_parts[i].size = tclinux_slave_offset -0x20000 ; //reserve the last 4 blocks
+			#else
+			tc3162_parts[i].size = tc3162_mtd_info->size -BLOCK_NUM_FOR_RESERVEAREA*( tc3162_mtd_info->erasesize) -0x20000; //reserve the last 4 blocks
+			#endif
+			if(tclinux_size > tc3162_parts[i].size)
+			{
+				printk("\r\ntclinux size is beyond the limit!!");
+				return -1;
+			}
+		}
+		#ifdef CONFIG_DUAL_IMAGE
+		if(!strcmp(tc3162_parts[i].name,"tclinux_slave"))
+		{
+			tc3162_parts[i].size = tc3162_mtd_info->size -BLOCK_NUM_FOR_RESERVEAREA*( tc3162_mtd_info->erasesize) -tclinux_slave_offset; //reserve the last 4 blocks
+			if(tclinux_slave_size > tc3162_parts[i].size)
+			{
+				printk("\r\ntclinux_slave size is beyond the limit!!");
+				return -1;
+			}
+		}
+		#endif
+ 	} 	
+ #endif
+
+	add_mtd_partitions(tc3162_mtd_info, tc3162_parts, tc3162_parts_size);
+	#ifdef CONFIG_DUAL_IMAGE
+	//read the flag from last block to tell kernel use which image(main or slave)
+	#if 0
+	memcpy(tmp,(char*)(0xb0000000+tc3162_mtd_info->size -sizeof(char)),sizeof(char));	
+	#endif
+	memcpy(tmp,(char*)bufaddr,sizeof(char));
+	if(flagvalue == tmp[0])
+	{
+		printk("\r\nrootfs_slave");
+		mtd = get_mtd_named("rootfs_slave");
+	}
+	else
+	{
+		printk("\r\nrootfs");
+	#endif
+		mtd = get_mtd_named("rootfs");
+	#ifdef CONFIG_DUAL_IMAGE
+	}
+	#endif	
+	if (mtd) {
+		ROOT_DEV = MKDEV(MTD_BLOCK_MAJOR, mtd->index);
+		put_mtd_device(mtd);
+	}
+
+	return 0;
+}
+
+static void __exit tc3162_mtd_cleanup(void)
+{
+	if (tc3162_mtd_info) {
+    	del_mtd_partitions(tc3162_mtd_info);
+       	map_destroy(tc3162_mtd_info);
+	}
+
+   	if (tc3162_map.virt) {
+   		iounmap(tc3162_map.virt);
+       	tc3162_map.virt = 0;
+	}
+}
+
+module_init(tc3162_mtd_init);
+module_exit(tc3162_mtd_cleanup);
+

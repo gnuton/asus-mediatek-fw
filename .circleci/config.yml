@@ -48,8 +48,9 @@ jobs:
           name: Prepare workspace
           command: |
             ls
+            pwd
             mkdir -p workspace/release
-            cp ${PROJECT_DIR}/Project/images/* workspace/release
+            cp ./Project/images/* workspace/release
             if [ -z "${CIRCLE_TAG}" ]; then
               echo "No CHANGELOG to copy. Not a release build."
             else

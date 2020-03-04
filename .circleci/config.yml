@@ -127,7 +127,6 @@ workflows:
             branches:
               ignore:
                - master
-               - mainline
       - publish-manifest-and-notes:
           filters:
             tags:

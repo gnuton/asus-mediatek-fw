@@ -14,7 +14,7 @@ Goals
  
 Branches
 --------
-- 'mainline' branch contains currently contains DSL-N16U upstream firmware.
+- 'mainline' branch contains currently contains DSL-N14U upstream firmware.
 
 List of routers that should be supported by this firmware
 ---------------

@@ -36,3 +36,7 @@ List of routers that should be supported by this firmware
 * RT-AC54U
 * RT-AC1200HP
 * Maybe more...
+
+Join the project!
+-----------------
+Talk to us on [Gitter](https://gitter.im/asuswrt/mediatek)

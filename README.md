@@ -8,8 +8,10 @@ Goals
 --------
 - [x] Fix GPL source code to make it building
 - [x] Build the firmware on the cloud for at least one model (DSL-N14U)
-- [x] Support more routers from the list below
-  - [x] xx
+- [x] Support more routers from the list below:
+  - [x] DSL-AC56U
+  - [x] DSL-N14U
+  - [x] DSL-N16U
 - [ ] Add software customizations
 - [ ] Provide automatic builds
  

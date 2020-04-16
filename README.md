@@ -6,11 +6,11 @@ ASUS firmware for MediaTek based RT and DSL routers.
 
 Goals
 --------
-[x] Fix GPL source code to make it building
-[x] Build the firmware on the cloud for at least one model (DSL-N14U)
-[] Support more routers from the list below
-[] Add software customizations
-[] Provide automatic builds
+- [x] Fix GPL source code to make it building
+- [x] Build the firmware on the cloud for at least one model (DSL-N14U)
+- [] Support more routers from the list below
+- [] Add software customizations
+- [] Provide automatic builds
  
 Branches
 --------
